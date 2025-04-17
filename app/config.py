@@ -1,11 +1,21 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
+
 
 class Config(BaseSettings):
+    # Ключи API для разных сервисов
     bot_token: str
     openai_key: str
-    openai_model: str = "gpt-3.5-turbo"
+    deepseek_key: str
+
+    # Модели для разных задач
+    openai_model: str = "gpt-4o-mini"  # Модель для ChatGPT
+    deepseek_model: str = "deepseek-v3"  # Модель для Deepseek
 
     class Config:
         env_file = ".env"
 
-config = Config()
+
+config = Config()  # Загружаем конфигурацию
+
+
+
