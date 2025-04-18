@@ -1,6 +1,7 @@
 import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Tuple
+from datetime import datetime
 
 # Путь к файлу SQLite. Меняйте при необходимости
 DB_PATH = "messages.db"
@@ -32,10 +33,13 @@ def init_db() -> None:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                id         INTEGER PRIMARY KEY,
-                username   TEXT,
-                first_name TEXT,
-                last_name  TEXT
+                id                INTEGER PRIMARY KEY,
+                username          TEXT,
+                first_name        TEXT,
+                last_name         TEXT,
+                ask_count         INTEGER DEFAULT 0,
+                pdf_check_done    INTEGER DEFAULT 0,
+                limits_reset_at   TEXT DEFAULT NULL
             )
             """
         )
@@ -66,11 +70,10 @@ def init_db() -> None:
         conn.commit()
 
 # -------------------------------------------------
-#  CRUD‑функции для users / messages
+#  CRUD‑функции для users / messages / threads
 # -------------------------------------------------
 
 def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None) -> None:
-    """Добавляет/обновляет запись о пользователе."""
     with get_db() as conn:
         conn.execute(
             """
@@ -82,7 +85,6 @@ def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[
         conn.commit()
 
 def save_message(user_id: int, message_text: str) -> None:
-    """Логирует сообщение пользователя или бота."""
     with get_db() as conn:
         conn.execute(
             """
@@ -93,26 +95,18 @@ def save_message(user_id: int, message_text: str) -> None:
         conn.commit()
 
 def get_message_stats() -> Tuple[int, int]:
-    """Возвращает (total_messages, unique_users)."""
     with get_db() as conn:
         cur = conn.cursor()
         total_messages = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         unique_users = cur.execute("SELECT COUNT(DISTINCT user_id) FROM messages").fetchone()[0]
         return total_messages, unique_users
 
-# -------------------------------------------------
-#  Threads helpers (OpenAI Assistants API)
-# -------------------------------------------------
-
 def get_thread(user_id: int) -> Optional[str]:
-    """Вернуть сохранённый thread_id (если уже есть)."""
     with get_db() as conn:
-        cur = conn.execute("SELECT thread_id FROM threads WHERE user_id = ?", (user_id,))
-        row = cur.fetchone()
+        row = conn.execute("SELECT thread_id FROM threads WHERE user_id = ?", (user_id,)).fetchone()
         return row["thread_id"] if row else None
 
 def save_thread(user_id: int, thread_id: str) -> None:
-    """Сохраняет сопоставление Telegram‑user → OpenAI‑thread."""
     with get_db() as conn:
         conn.execute(
             """
@@ -123,7 +117,61 @@ def save_thread(user_id: int, thread_id: str) -> None:
         conn.commit()
 
 # -------------------------------------------------
-#  Сервисная функция: вызов при запуске бота
+#  Ограничения по использованию
 # -------------------------------------------------
 
-# Вызывайте init_db() в app/main.py, чтобы гарантировать существование таблиц
+def get_user_limits(user_id: int) -> Tuple[int, int]:
+    now = datetime.now()
+    current_month = now.strftime("%Y-%m")
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT ask_count, pdf_check_done, limits_reset_at FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+
+        if not row:
+            return (0, 0)
+
+        last_reset = row["limits_reset_at"]
+        if last_reset != current_month:
+            # Сбрасываем
+            conn.execute("""
+                    UPDATE users
+                    SET ask_count = 0,
+                        pdf_check_done = 0,
+                        limits_reset_at = ?
+                    WHERE id = ?
+                """, (current_month, user_id))
+            conn.commit()
+            return (0, 0)
+
+        return (row["ask_count"], row["pdf_check_done"])
+
+def increment_ask(user_id: int):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET ask_count = ask_count + 1 WHERE id = ?",
+            (user_id,)
+        )
+        conn.commit()
+
+def mark_pdf_used(user_id: int):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET pdf_check_done = 1 WHERE id = ?",
+            (user_id,)
+        )
+        conn.commit()
+
+# -------------------------------------------------
+#  Поиск по username
+# -------------------------------------------------
+
+def get_user_by_username(username: str) -> Optional[dict]:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?",
+            (username.lstrip("@"),)  # убираем @ на случай если передали с ним
+        ).fetchone()
+        return dict(row) if row else None

@@ -6,6 +6,7 @@ from pdfplumber import open as pdf_open
 from lxml import etree, html
 from aiogram.fsm.context import FSMContext
 from .states import AskStates, CheckStates    # 👈 наше состояние
+from app.services import db_service
 
 router = Router()
 
@@ -23,6 +24,13 @@ async def start_check(message: Message, state: FSMContext):
                 lambda m: m.document and m.document.mime_type == "application/pdf")
 async def process_pdf(message: Message, state: FSMContext):
     await message.answer("Обрабатываю файл, подождите…")
+    user_id = message.from_user.id
+
+    # проверка лимита
+    _, pdf_used = db_service.get_user_limits(user_id)
+    if pdf_used:
+        await message.answer("❗ Вы уже использовали проверку PDF.")
+        return
 
     # 1) скачиваем
     file = await message.bot.get_file(message.document.file_id)
@@ -41,6 +49,7 @@ async def process_pdf(message: Message, state: FSMContext):
     html_safe = sanitize_html(html_answer)
 
     await message.answer(html_safe, parse_mode="HTML")
+    db_service.mark_pdf_used(user_id)
     await state.clear()
 
 # -------- вспомогательные функции --------
@@ -118,9 +127,9 @@ async def cmd_help(message: Message):
     help_text = (
         "Список доступных команд:\n"
         "/start - Запуск бота\n"
-        "/stats - Статистика\n"
         "/help - Список команд\n"
         "/ask - Задать вопрос\n"
+        "/check - Проверить заявку в пдф формате\n"
     )
     await message.answer(help_text)
 
@@ -132,20 +141,40 @@ async def start_ask(message: Message, state: FSMContext):
                          "Для отмены отправьте /cancel")
     await state.set_state(AskStates.waiting_for_question)
 
-# ───── получаем вопрос пользователя ───────────────────────
-@router.message(AskStates.waiting_for_question, F.text)
-async def process_question(message: Message, state: FSMContext):
-    question = message.text.strip()
-    await message.answer("Думаю…")
-    answer = await ask_openai(question, message.from_user.id)   # 👈 добавили ID
-    await message.answer(answer)
-    await state.clear()                 # сбрасываем состояние
-
 # ───── отмена ─────────────────────────────────────────────
 @router.message(Command("cancel"))
 async def cancel_anytime(message: Message, state: FSMContext):
     if await state.get_state():
         await state.clear()
-        await message.answer("Действие отменено.")
+        await message.answer("Действие отменено.\n"
+                             "Список доступных команд:\n"
+                                "/start - Запуск бота\n"
+                                "/help - Список команд\n"
+                                "/ask - Задать вопрос\n"
+                                "/cancel - Отмена\n"
+                                "/check - Проверить заявку в пдф формате\n")
     else:
         await message.answer("Нечего отменять.")
+
+# ───── получаем вопрос пользователя ───────────────────────
+@router.message(AskStates.waiting_for_question, F.text)
+async def process_question(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text.strip()
+
+    # логируем
+    db_service.save_message(user_id, text)
+
+    # проверка лимита
+    ask_count, _ = db_service.get_user_limits(user_id)
+    if ask_count >= 5:
+        await message.answer("❗ Вы уже задали 5 вопросов. Лимит исчерпан.")
+        return
+
+    await message.answer("Думаю…")
+    answer = await ask_openai(text, user_id)
+    await message.answer(answer)
+
+    db_service.increment_ask(user_id)
+    await state.clear()
+
