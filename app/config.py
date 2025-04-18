@@ -10,6 +10,7 @@ class Config(BaseSettings):
     # Модели для разных задач
     openai_model: str = "gpt-4o-mini"  # Модель для ChatGPT
     deepseek_model: str = "deepseek-v3"  # Модель для Deepseek
+    assistant_id: str
 
     class Config:
         env_file = ".env"

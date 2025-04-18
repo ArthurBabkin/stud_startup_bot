@@ -1,8 +1,6 @@
 from aiogram import Router
-from aiogram.types import Message
 from aiogram.filters import CommandStart
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
-from aiogram.filters import Command
+from aiogram.types import Message
 from app.services import db_service
 
 router = Router()

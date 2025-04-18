@@ -2,8 +2,6 @@ from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
 from app.services.db_service import get_message_stats
-from aiogram.exceptions import TelegramAPIError
-from app.config import config
 
 router = Router()
 

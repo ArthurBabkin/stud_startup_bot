@@ -1,4 +1,4 @@
-from aiogram import Router, Dispatcher
+from aiogram import Dispatcher
 from app.handlers import user, startup, admin  # Импортируем обработчики
 
 def register_routers(dp: Dispatcher):

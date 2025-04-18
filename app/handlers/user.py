@@ -3,10 +3,10 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
 from pdfplumber import open as pdf_open
-from lxml import etree, html
 from aiogram.fsm.context import FSMContext
 from .states import AskStates, CheckStates    # 👈 наше состояние
 from app.services import db_service
+import re
 
 router = Router()
 
@@ -43,7 +43,7 @@ async def process_pdf(message: Message, state: FSMContext):
     clean_text = clean_pdf_text(raw_text)
 
     # 3) спрашиваем Deepseek
-    html_answer = await ask_deepseek(clean_text)
+    html_answer = await ask_deepseek(clean_text, message)
 
     # 4) пост‑обработка (удаляем теги, не поддерж. Telegram)
     html_safe = sanitize_html(html_answer)
