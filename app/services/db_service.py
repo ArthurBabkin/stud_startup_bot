@@ -77,7 +77,7 @@ def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[
     with get_db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO users (id, username, first_name, last_name)
+            INSERT OR IGNORE INTO users (id, username, first_name, last_name)
             VALUES (?, ?, ?, ?)
             """,
             (user_id, username, first_name, last_name),
