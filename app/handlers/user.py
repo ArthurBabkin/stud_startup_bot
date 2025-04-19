@@ -6,6 +6,8 @@ from pdfplumber import open as pdf_open
 from aiogram.fsm.context import FSMContext
 from .states import AskStates, CheckStates    # 👈 наше состояние
 from app.services import db_service
+from aiogram.filters import StateFilter
+from aiogram.fsm.state import default_state
 
 router = Router()
 
@@ -28,7 +30,9 @@ async def process_pdf(message: Message, state: FSMContext):
     # проверка лимита
     _, pdf_used = db_service.get_user_limits(user_id)
     if pdf_used:
-        await message.answer("❗ Вы уже использовали проверку PDF.")
+        await message.answer("Вы уже использовали проверку PDF. "
+                             "Вы получите новую через 72 часа. "
+                             "Или напишите @ilyasGaliev для получения продвинутого доступа.")
         return
 
     # 1) скачиваем
@@ -167,7 +171,9 @@ async def process_question(message: Message, state: FSMContext):
     # проверка лимита
     ask_count, _ = db_service.get_user_limits(user_id)
     if ask_count >= 5:
-        await message.answer("❗ Вы уже задали 5 вопросов. Лимит исчерпан.")
+        await message.answer("Вы уже использовали все 5 вопросов. "
+                             "Ваш лимит обновится через 72 часа. "
+                             "Или напишите @ilyasGaliev для получения продвинутого доступа.")
         return
 
     await message.answer("Думаю…")
@@ -177,3 +183,20 @@ async def process_question(message: Message, state: FSMContext):
     db_service.increment_ask(user_id)
     await state.clear()
 
+# Хендлер на любые другие текстовые сообщения
+@router.message(StateFilter(default_state), F.text)
+async def fallback_help(message: Message):
+    help_text = (
+        "📌 Список доступных команд:\n"
+        "/start — Запуск бота\n"
+        "/help — Справка\n"
+        "/ask — Задать вопрос\n"
+        "/check — Проверить заявку (PDF)\n"
+        "/cancel — Отмена текущего действия\n\n"
+        "✉️ Просто выбери нужную команду — я помогу!"
+    )
+    await message.answer(help_text)
+
+@router.message(CheckStates.waiting_for_pdf)
+async def handle_invalid_file(message: Message):
+    await message.answer("⚠️ Пожалуйста, отправьте именно PDF‑файл заявки.")
