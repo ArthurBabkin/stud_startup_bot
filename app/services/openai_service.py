@@ -1,12 +1,20 @@
-from app.config import config
-from openai import OpenAI
-from app.services import db_service
 from aiogram.types import Message
+import httpx
+from openai import OpenAI
+from app.config import config
+from app.services import db_service
 
+# SOCKS5-прокси от Shadowsocks
+proxy_url = "socks5h://127.0.0.1:1080"
 
-# Устанавливаем ключ API для OpenAI
-# один экземпляр клиента на весь модуль
-client = OpenAI(api_key=config.openai_key)
+# Создаём кастомный http-клиент с прокси
+http_client = httpx.Client(proxy=proxy_url)
+
+# Подключаем его к OpenAI
+client = OpenAI(
+    api_key=config.openai_key,
+    http_client=http_client
+)
 ASSISTANT_ID = config.assistant_id
 
 def get_or_create_thread(tg_user_id: int) -> str:
@@ -20,6 +28,7 @@ def get_or_create_thread(tg_user_id: int) -> str:
 
 # app/services/openai_service.py
 async def ask_openai(prompt: str, tg_user_id: int) -> str:
+
     thread_id = get_or_create_thread(tg_user_id)
 
     # 1) добавляем сообщение пользователя

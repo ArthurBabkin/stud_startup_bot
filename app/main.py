@@ -7,10 +7,10 @@ from app.services.db_service import init_db
 
 
 async def main():
-    init_db()                                  # ← создаём таблицы
+    init_db()    # ← создаём таблицы
 
     bot = Bot(token=config.bot_token)
-    dp  = Dispatcher(storage=MemoryStorage())  # FSM для /ask
+    dp = Dispatcher(storage=MemoryStorage())  # FSM для /ask
 
     register_routers(dp)
 
