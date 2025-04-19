@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Путь к файлу SQLite. Меняйте при необходимости
 DB_PATH = "messages.db"
@@ -75,13 +75,28 @@ def init_db() -> None:
 
 def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None) -> None:
     with get_db() as conn:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO users (id, username, first_name, last_name)
-            VALUES (?, ?, ?, ?)
-            """,
-            (user_id, username, first_name, last_name),
-        )
+        cur = conn.cursor()
+        exists = cur.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
+
+        if exists:
+            # обновим имя и username, но НЕ трогаем лимиты
+            cur.execute(
+                """
+                UPDATE users SET username = ?, first_name = ?, last_name = ?
+                WHERE id = ?
+                """,
+                (username, first_name, last_name, user_id)
+            )
+        else:
+            # создаём с лимитами по умолчанию
+            cur.execute(
+                """
+                INSERT INTO users (id, username, first_name, last_name, ask_count, pdf_check_done, limits_reset_at)
+                VALUES (?, ?, ?, ?, 0, 0, ?)
+                """,
+                (user_id, username, first_name, last_name, datetime.now().isoformat())
+            )
+
         conn.commit()
 
 def save_message(user_id: int, message_text: str) -> None:
@@ -122,7 +137,6 @@ def save_thread(user_id: int, thread_id: str) -> None:
 
 def get_user_limits(user_id: int) -> Tuple[int, int]:
     now = datetime.now()
-    current_month = now.strftime("%Y-%m")
 
     with get_db() as conn:
         row = conn.execute(
@@ -133,16 +147,29 @@ def get_user_limits(user_id: int) -> Tuple[int, int]:
         if not row:
             return (0, 0)
 
-        last_reset = row["limits_reset_at"]
-        if last_reset != current_month:
-            # Сбрасываем
+        # если поле пустое — сбрасываем лимиты
+        last_reset_str = row["limits_reset_at"]
+        if not last_reset_str:
             conn.execute("""
-                    UPDATE users
-                    SET ask_count = 0,
-                        pdf_check_done = 0,
-                        limits_reset_at = ?
-                    WHERE id = ?
-                """, (current_month, user_id))
+                UPDATE users
+                SET ask_count = 0,
+                    pdf_check_done = 0,
+                    limits_reset_at = ?
+                WHERE id = ?
+            """, (now.isoformat(), user_id))
+            conn.commit()
+            return (0, 0)
+
+        # сравниваем дату последнего сброса с текущей
+        last_reset = datetime.fromisoformat(last_reset_str)
+        if now - last_reset > timedelta(days=3):
+            conn.execute("""
+                UPDATE users
+                SET ask_count = 0,
+                    pdf_check_done = 0,
+                    limits_reset_at = ?
+                WHERE id = ?
+            """, (now.isoformat(), user_id))
             conn.commit()
             return (0, 0)
 

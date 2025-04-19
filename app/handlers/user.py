@@ -6,7 +6,6 @@ from pdfplumber import open as pdf_open
 from aiogram.fsm.context import FSMContext
 from .states import AskStates, CheckStates    # 👈 наше состояние
 from app.services import db_service
-import re
 
 router = Router()
 
