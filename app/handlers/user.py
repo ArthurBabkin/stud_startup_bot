@@ -55,10 +55,6 @@ async def process_pdf(message: Message, state: FSMContext):
     db_service.mark_pdf_used(user_id)
     await state.clear()
 
-@router.message(CheckStates.waiting_for_pdf)
-async def handle_invalid_file(message: Message):
-    await message.answer("⚠️ Пожалуйста, отправьте именно PDF‑файл заявки.")
-
 # -------- вспомогательные функции --------
 ALLOWED_TAGS = {"b", "i", "blockquote"}
 
@@ -201,3 +197,6 @@ async def fallback_help(message: Message):
     )
     await message.answer(help_text)
 
+@router.message(CheckStates.waiting_for_pdf)
+async def handle_invalid_file(message: Message):
+    await message.answer("⚠️ Пожалуйста, отправьте именно PDF‑файл заявки.")
