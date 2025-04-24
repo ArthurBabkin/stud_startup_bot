@@ -1,20 +1,12 @@
 from aiogram.types import Message
-import httpx
 from openai import OpenAI
 from app.config import config
 from app.services import db_service
 
-# SOCKS5-прокси от Shadowsocks
-proxy_url = "socks5h://127.0.0.1:1080"
+# Initialize the OpenAI client directly without proxy
+client = OpenAI(api_key=config.openai_key)
+print("Using direct OpenAI connection")
 
-# Создаём кастомный http-клиент с прокси
-http_client = httpx.Client(proxy=proxy_url)
-
-# Подключаем его к OpenAI
-client = OpenAI(
-    api_key=config.openai_key,
-    http_client=http_client
-)
 ASSISTANT_ID = config.assistant_id
 
 def get_or_create_thread(tg_user_id: int) -> str:
@@ -63,8 +55,14 @@ async def ask_openai(prompt: str, tg_user_id: int) -> str:
 
 
 async def ask_deepseek(prompt: str, message: Message) -> str:
-    client = OpenAI(api_key=config.deepseek_key,
-                    base_url="https://api.deepseek.com")
+    # deepseek_client = OpenAI(
+    #     api_key=config.deepseek_key,
+    #     base_url="https://api.deepseek.com"
+    # )
+    deepseek_client = OpenAI(
+        api_key=config.openai_key,
+        model="gpt-4o-mini"
+    )
 
     system = """
 Ты эксперт по оценке заявок на гранты "Студенческий стартап" от Фонда содействия инновациям. 
@@ -324,7 +322,7 @@ YouTube‑курсы — бесплатны, но нет интерактивн�
 Не сокращай, будь детальным, основанным на опыте экспертизы реальных заявок. Если заявка почти полностью пустая, то не оценивай проект, скажи, что заявка пустая.
 """
 
-    resp = client.chat.completions.create(
+    resp = deepseek_client.chat.completions.create(
         model="deepseek-chat",
         messages=[
             {"role": "system", "content": system},

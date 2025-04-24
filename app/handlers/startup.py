@@ -2,6 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 from app.services import db_service
+from app.services.db_service import ASK_LIMIT, PDF_LIMIT, LIMIT_RESET_DAYS
 
 router = Router()
 
@@ -29,7 +30,7 @@ async def cmd_start(message: Message):
             "✔️ Вопросы по заявке\n\n"
         
             "<i>Выбери нужную для тебя опцию ниже:</i>\n"
-            "(бесплатно: 5 вопросов и 1 проверка PDF каждые 3 дня)\n\n"
+            f"(бесплатно: {ASK_LIMIT} вопросов и {PDF_LIMIT} проверки PDF каждые {LIMIT_RESET_DAYS} дня)\n\n"
         
             "<b>📋 Список доступных команд:</b>\n"
             "/start — Запуск бота\n"

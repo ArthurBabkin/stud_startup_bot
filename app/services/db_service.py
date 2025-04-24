@@ -2,9 +2,15 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
+import math
 
 # Путь к файлу SQLite. Меняйте при необходимости
 DB_PATH = "messages.db"
+
+# Константы для лимитов
+LIMIT_RESET_DAYS = 3  # Количество дней до сброса лимита
+ASK_LIMIT = 5  # Лимит использования /ask команды
+PDF_LIMIT = 2  # Лимит проверки PDF (1 = один раз разрешено)
 
 # -------------------------------------------------
 #  Базовый helper
@@ -162,7 +168,7 @@ def get_user_limits(user_id: int) -> Tuple[int, int]:
 
         # сравниваем дату последнего сброса с текущей
         last_reset = datetime.fromisoformat(last_reset_str)
-        if now - last_reset > timedelta(days=3):
+        if now - last_reset > timedelta(days=LIMIT_RESET_DAYS):
             conn.execute("""
                 UPDATE users
                 SET ask_count = 0,
@@ -186,7 +192,7 @@ def increment_ask(user_id: int):
 def mark_pdf_used(user_id: int):
     with get_db() as conn:
         conn.execute(
-            "UPDATE users SET pdf_check_done = 1 WHERE id = ?",
+            "UPDATE users SET pdf_check_done = pdf_check_done + 1 WHERE id = ?",
             (user_id,)
         )
         conn.commit()
@@ -226,3 +232,25 @@ def delete_user(user_id: int) -> bool:
         except Exception:
             conn.rollback()
             return False
+
+def get_time_until_reset(user_id: int) -> Optional[int]:
+    """Возвращает количество часов до сброса лимитов или None если лимиты уже сброшены."""
+    now = datetime.now()
+    
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT limits_reset_at FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        
+        if not row or not row["limits_reset_at"]:
+            return None
+        
+        last_reset = datetime.fromisoformat(row["limits_reset_at"])
+        next_reset = last_reset + timedelta(days=LIMIT_RESET_DAYS)
+        
+        if now >= next_reset:
+            return None  # Лимиты уже должны быть сброшены
+        
+        hours_remaining = (next_reset - now).total_seconds() / 3600
+        return math.ceil(hours_remaining)  # Округляем вверх до ближайшего часа

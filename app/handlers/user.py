@@ -6,6 +6,7 @@ from pdfplumber import open as pdf_open
 from aiogram.fsm.context import FSMContext
 from .states import AskStates, CheckStates    # 👈 наше состояние
 from app.services import db_service
+from app.services.db_service import ASK_LIMIT, PDF_LIMIT, LIMIT_RESET_DAYS
 from aiogram.filters import StateFilter
 from aiogram.fsm.state import default_state
 import os
@@ -26,15 +27,22 @@ async def start_check(message: Message, state: FSMContext):
 @router.message(CheckStates.waiting_for_pdf,
                 lambda m: m.document and m.document.mime_type == "application/pdf")
 async def process_pdf(message: Message, state: FSMContext):
-    await message.answer("Обрабатываю файл, подождите…")
+    # Отправляем промежуточное сообщение о обработке
+    processing_msg = await message.answer("Обрабатываю файл, подождите…")
+    
     user_id = message.from_user.id
 
     # проверка лимита
     _, pdf_used = db_service.get_user_limits(user_id)
-    if pdf_used:
-        await message.answer("Вы уже использовали проверку PDF. "
-                             "Вы получите новую через 72 часа. "
-                             "Или напишите @theother_archeee для получения продвинутого доступа.")
+    if pdf_used >= PDF_LIMIT:
+        # Получаем время до сброса
+        hours_until_reset = db_service.get_time_until_reset(user_id)
+        reset_text = f"через {hours_until_reset} ч" if hours_until_reset else f"через {LIMIT_RESET_DAYS*24} часов."
+        
+        # Заменяем сообщение о обработке на сообщение о превышении лимита
+        await processing_msg.edit_text(f"Вы уже использовали все {PDF_LIMIT} проверки PDF. "
+                             f"Ваш лимит обновится {reset_text}. "
+                             f"Или напишите @theother_archeee для получения продвинутого доступа.")
         return
 
     # Создаем директорию для файлов, если её нет
@@ -61,9 +69,40 @@ async def process_pdf(message: Message, state: FSMContext):
     # 4) пост‑обработка (удаляем теги, не поддерж. Telegram)
     html_safe = sanitize_html(html_answer)
 
-    await message.answer(html_safe, parse_mode="HTML")
+    # Заменяем промежуточное сообщение ответом от модели
+    try:
+        await processing_msg.edit_text(html_safe, parse_mode="HTML")
+    except Exception:
+        # Если ответ слишком длинный или есть другие проблемы с редактированием,
+        # удаляем промежуточное сообщение и отправляем новое
+        await processing_msg.delete()
+        await message.answer(html_safe, parse_mode="HTML")
+    
     db_service.mark_pdf_used(user_id)
     await state.clear()
+    
+    # Показываем доступные команды после проверки PDF
+    ask_count, pdf_used = db_service.get_user_limits(user_id)
+    ask_remaining = max(0, ASK_LIMIT - ask_count)
+    pdf_remaining = max(0, PDF_LIMIT - pdf_used)
+    
+    # Получаем время до сброса
+    hours_until_reset = db_service.get_time_until_reset(user_id)
+    reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
+    
+    commands_text = (
+        "📋 <b>Что дальше?</b>\n"
+        "/ask — Задать вопрос\n"
+        "/check — Проверить другую заявку\n"
+        "/help — Другие команды\n\n"
+        
+        f"💬 У вас осталось {ask_remaining} из {ASK_LIMIT} вопросов\n"
+        f"📄 У вас осталось {pdf_remaining} из {PDF_LIMIT} проверок PDF\n\n"
+        
+        f"{reset_text}"
+    )
+    
+    await message.answer(commands_text, parse_mode="HTML")
 
 # -------- вспомогательные функции --------
 ALLOWED_TAGS = {"b", "i", "blockquote"}
@@ -137,12 +176,31 @@ def clean_pdf_text(text: str) -> str:
 # Обработчик для команды /help
 @router.message(Command("help"))
 async def cmd_help(message: Message):
+    user_id = message.from_user.id
+    
+    # Получаем текущие лимиты пользователя
+    ask_count, pdf_used = db_service.get_user_limits(user_id)
+    
+    # Рассчитываем оставшиеся использования
+    ask_remaining = max(0, ASK_LIMIT - ask_count)
+    pdf_remaining = max(0, PDF_LIMIT - pdf_used)
+    
+    # Получаем время до сброса
+    hours_until_reset = db_service.get_time_until_reset(user_id)
+    
+    reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
+    
     help_text = (
-        "Список доступных команд:\n"
+        "📌 Список доступных команд:\n"
         "/start - Запуск бота\n"
         "/help - Список команд\n"
         "/ask - Задать вопрос\n"
-        "/check - Проверить заявку в пдф формате\n"
+        "/check - Проверить заявку в пдф формате\n\n"
+        
+        f"💬 У вас осталось {ask_remaining} из {ASK_LIMIT} вопросов\n"
+        f"📄 У вас осталось {pdf_remaining} из {PDF_LIMIT} проверок PDF\n\n"
+        
+        f"{reset_text}"
     )
     await message.answer(help_text)
 
@@ -159,13 +217,35 @@ async def start_ask(message: Message, state: FSMContext):
 async def cancel_anytime(message: Message, state: FSMContext):
     if await state.get_state():
         await state.clear()
-        await message.answer("Действие отменено.\n"
-                             "Список доступных команд:\n"
-                                "/start - Запуск бота\n"
-                                "/help - Список команд\n"
-                                "/ask - Задать вопрос\n"
-                                "/cancel - Отмена\n"
-                                "/check - Проверить заявку в пдф формате\n")
+        
+        user_id = message.from_user.id
+        
+        # Получаем текущие лимиты пользователя
+        ask_count, pdf_used = db_service.get_user_limits(user_id)
+        
+        # Рассчитываем оставшиеся использования
+        ask_remaining = max(0, ASK_LIMIT - ask_count)
+        pdf_remaining = max(0, PDF_LIMIT - pdf_used)
+        
+        # Получаем время до сброса
+        hours_until_reset = db_service.get_time_until_reset(user_id)
+        
+        reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
+        
+        await message.answer(
+            "Действие отменено.\n\n"
+            "📌 Список доступных команд:\n"
+            "/start - Запуск бота\n"
+            "/help - Список команд\n"
+            "/ask - Задать вопрос\n"
+            "/cancel - Отмена\n"
+            "/check - Проверить заявку в пдф формате\n\n"
+            
+            f"💬 У вас осталось {ask_remaining} из {ASK_LIMIT} вопросов\n"
+            f"📄 У вас осталось {pdf_remaining} из {PDF_LIMIT} проверок PDF\n\n"
+            
+            f"{reset_text}"
+        )
     else:
         await message.answer("Нечего отменять.")
 
@@ -180,22 +260,69 @@ async def process_question(message: Message, state: FSMContext):
 
     # проверка лимита
     ask_count, _ = db_service.get_user_limits(user_id)
-    if ask_count >= 5:
-        await message.answer("Вы уже использовали все 5 вопросов. "
-                             "Ваш лимит обновится через 72 часа. "
-                             "Или напишите @theother_archeee для получения продвинутого доступа.")
+    if ask_count >= ASK_LIMIT:
+        # Получаем время до сброса
+        hours_until_reset = db_service.get_time_until_reset(user_id)
+        reset_text = f"через {hours_until_reset} ч" if hours_until_reset else f"через {LIMIT_RESET_DAYS*24} часов."
+        
+        await message.answer(f"Вы уже использовали все {ASK_LIMIT} вопросов. "
+                             f"Ваш лимит обновится {reset_text}. "
+                             f"Или напишите @theother_archeee для получения продвинутого доступа.")
         return
 
-    await message.answer("Думаю…")
+    # Отправляем промежуточное сообщение "Думаю..."
+    thinking_msg = await message.answer("Думаю...")
+    
+    # Получаем ответ от OpenAI
     answer = await ask_openai(text, user_id)
-    await message.answer(answer)
+    
+    # Редактируем сообщение "Думаю..." на ответ от модели
+    await thinking_msg.edit_text(answer)
 
+    # Получаем обновленные лимиты после использования
     db_service.increment_ask(user_id)
     await state.clear()
+    
+    # Показываем доступные команды после ответа
+    ask_count, pdf_used = db_service.get_user_limits(user_id)
+    ask_remaining = max(0, ASK_LIMIT - ask_count)
+    pdf_remaining = max(0, PDF_LIMIT - pdf_used)
+    
+    # Получаем время до сброса
+    hours_until_reset = db_service.get_time_until_reset(user_id)
+    reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
+    
+    commands_text = (
+        "📋 <b>Что дальше?</b>\n"
+        "/ask — Задать еще вопрос\n"
+        "/check — Проверить заявку (PDF)\n"
+        "/help — Другие команды\n\n"
+        
+        f"💬 У вас осталось {ask_remaining} из {ASK_LIMIT} вопросов\n"
+        f"📄 У вас осталось {pdf_remaining} из {PDF_LIMIT} проверок PDF\n\n"
+        
+        f"{reset_text}"
+    )
+    
+    await message.answer(commands_text, parse_mode="HTML")
 
 # Хендлер на любые другие текстовые сообщения
 @router.message(StateFilter(default_state), F.text)
 async def fallback_help(message: Message):
+    user_id = message.from_user.id
+    
+    # Получаем текущие лимиты пользователя
+    ask_count, pdf_used = db_service.get_user_limits(user_id)
+    
+    # Рассчитываем оставшиеся использования
+    ask_remaining = max(0, ASK_LIMIT - ask_count)
+    pdf_remaining = max(0, PDF_LIMIT - pdf_used)
+    
+    # Получаем время до сброса
+    hours_until_reset = db_service.get_time_until_reset(user_id)
+    
+    reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
+    
     help_text = (
         "📌 Список доступных команд:\n"
         "/start — Запуск бота\n"
@@ -203,6 +330,12 @@ async def fallback_help(message: Message):
         "/ask — Задать вопрос\n"
         "/check — Проверить заявку (PDF)\n"
         "/cancel — Отмена текущего действия\n\n"
+        
+        f"💬 У вас осталось {ask_remaining} из {ASK_LIMIT} вопросов\n"
+        f"📄 У вас осталось {pdf_remaining} из {PDF_LIMIT} проверок PDF\n\n"
+        
+        f"{reset_text}\n\n"
+        
         "✉️ Просто выбери нужную команду — я помогу!"
     )
     await message.answer(help_text)
