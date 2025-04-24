@@ -11,6 +11,8 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.state import default_state
 import os
 from datetime import datetime
+from app.config import config
+from app.services.mistral_service import extract_text_with_mistral_ocr
 
 router = Router()
 
@@ -60,7 +62,13 @@ async def process_pdf(message: Message, state: FSMContext):
         f.write(pdf_bytes.getvalue())
 
     # 2) конвертируем в текст
-    raw_text = extract_text_from_pdf(file_path)
+    if config.use_mistral_ocr:
+        # Используем Mistral OCR с резервным механизмом pdfplumber
+        raw_text = await extract_text_with_mistral_ocr(file_path)
+    else:
+        # Используем pdfplumber напрямую
+        raw_text = extract_text_from_pdf(file_path)
+    
     clean_text = clean_pdf_text(raw_text)
 
     # 3) спрашиваем Deepseek
@@ -69,14 +77,13 @@ async def process_pdf(message: Message, state: FSMContext):
     # 4) пост‑обработка (удаляем теги, не поддерж. Telegram)
     html_safe = sanitize_html(html_answer)
 
-    # Заменяем промежуточное сообщение ответом от модели
-    try:
-        await processing_msg.edit_text(html_safe, parse_mode="HTML")
-    except Exception:
-        # Если ответ слишком длинный или есть другие проблемы с редактированием,
-        # удаляем промежуточное сообщение и отправляем новое
-        await processing_msg.delete()
-        await message.answer(html_safe, parse_mode="HTML")
+    # Удаляем промежуточное сообщение
+    await processing_msg.delete()
+    
+    # Разбиваем длинное сообщение на части и отправляем по частям
+    message_chunks = split_long_message(html_safe)
+    for chunk in message_chunks:
+        await message.answer(chunk, parse_mode="HTML")
     
     db_service.mark_pdf_used(user_id)
     await state.clear()
@@ -92,7 +99,7 @@ async def process_pdf(message: Message, state: FSMContext):
     
     commands_text = (
         "📋 <b>Что дальше?</b>\n"
-        "/ask — Задать вопрос\n"
+        "/ask — Задать вопрос по результатам проверки\n"
         "/check — Проверить другую заявку\n"
         "/help — Другие команды\n\n"
         
@@ -146,32 +153,59 @@ def clean_pdf_text(text: str) -> str:
         text = text.replace(section, "")  # Удаляем указанные разделы
     return text
 
-# def format_html(response: str) -> str:
-#     """Форматируем ответ в HTML-разметку и убираем неподдерживаемые теги"""
-#     # Заменяем ** на <b> и другие поддерживаемые теги
-#     response = response.replace("**", "<b>").replace("</b>", "</b>")
-#     response = response.replace("- ", "<ul><li>").replace("\n", "</li></ul>")
-#     response = response.replace("<p>", "").replace("</p>", "")  # Убираем <p> теги
-#     return response
-#
-# def validate_html(html_content: str) -> str:
-#     try:
-#         tree = html.fromstring(html_content)
-#         return html.tostring(tree, pretty_print=True).decode()
-#     except (etree.XMLSyntaxError, etree.DocumentInvalid):
-#         return "There was an error with the HTML formatting."
-#
-# def clean_html(response: str) -> str:
-#     """Удаляет неподдерживаемые теги и возвращает валидный HTML"""
-#     tree = html.fromstring(response)  # Парсим строку HTML
-#     # Удаляем все неподдерживаемые теги, например, <p>, <div>
-#     for elem in tree.xpath("//p | //div"):  # Удаляем все теги <p> и <div>
-#         elem.getparent().remove(elem)
-#
-#     # Преобразуем обратно в строку
-#     cleaned_html = html.tostring(tree, method='html').decode()
-#     return cleaned_html
-
+def split_long_message(text, max_length=4000):
+    """Split a long message into chunks that fit within Telegram's limits."""
+    if len(text) <= max_length:
+        return [text]
+    
+    chunks = []
+    current_chunk = ""
+    
+    # Split by paragraphs (double newlines)
+    paragraphs = text.split("\n\n")
+    
+    for paragraph in paragraphs:
+        # If adding this paragraph would exceed the limit
+        if len(current_chunk) + len(paragraph) + 2 > max_length:
+            # If the current chunk is not empty, add it to chunks
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = ""
+            
+            # If the paragraph itself is longer than max_length, split it further
+            if len(paragraph) > max_length:
+                # Split by newlines
+                lines = paragraph.split("\n")
+                for line in lines:
+                    if len(current_chunk) + len(line) + 1 > max_length:
+                        if current_chunk:
+                            chunks.append(current_chunk)
+                            current_chunk = ""
+                        
+                        # If even a single line is too long, split it by characters
+                        if len(line) > max_length:
+                            for i in range(0, len(line), max_length):
+                                chunks.append(line[i:i+max_length])
+                        else:
+                            current_chunk = line
+                    else:
+                        if current_chunk:
+                            current_chunk += "\n" + line
+                        else:
+                            current_chunk = line
+            else:
+                current_chunk = paragraph
+        else:
+            if current_chunk:
+                current_chunk += "\n\n" + paragraph
+            else:
+                current_chunk = paragraph
+    
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+    
+    return chunks
 
 # Обработчик для команды /help
 @router.message(Command("help"))

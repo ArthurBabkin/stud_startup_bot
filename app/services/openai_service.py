@@ -9,6 +9,11 @@ print("Using direct OpenAI connection")
 
 ASSISTANT_ID = config.assistant_id
 
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 def get_or_create_thread(tg_user_id: int) -> str:
     thread_id = db_service.get_thread(tg_user_id)
     if thread_id:
@@ -55,14 +60,13 @@ async def ask_openai(prompt: str, tg_user_id: int) -> str:
 
 
 async def ask_deepseek(prompt: str, message: Message) -> str:
-    # deepseek_client = OpenAI(
-    #     api_key=config.deepseek_key,
-    #     base_url="https://api.deepseek.com"
-    # )
     deepseek_client = OpenAI(
-        api_key=config.openai_key,
-        model="gpt-4o-mini"
+        api_key=config.deepseek_key,
+        base_url="https://api.deepseek.com"
     )
+    # deepseek_client = OpenAI(
+    #     api_key=config.openai_key
+    # )
 
     system = """
 Ты эксперт по оценке заявок на гранты "Студенческий стартап" от Фонда содействия инновациям. 
@@ -322,14 +326,17 @@ YouTube‑курсы — бесплатны, но нет интерактивн�
 Не сокращай, будь детальным, основанным на опыте экспертизы реальных заявок. Если заявка почти полностью пустая, то не оценивай проект, скажи, что заявка пустая.
 """
 
+    logger.debug(f"Prompt: {prompt}")
+    print(f"Prompt: {prompt}")
+
     resp = deepseek_client.chat.completions.create(
         model="deepseek-chat",
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=3000,
-        temperature=0.5,
+        temperature=1.2,
+        max_tokens=8000,
         stream=False
     )
 
