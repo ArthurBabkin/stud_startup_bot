@@ -8,6 +8,8 @@ from .states import AskStates, CheckStates    # 👈 наше состояние
 from app.services import db_service
 from aiogram.filters import StateFilter
 from aiogram.fsm.state import default_state
+import os
+from datetime import datetime
 
 router = Router()
 
@@ -35,14 +37,22 @@ async def process_pdf(message: Message, state: FSMContext):
                              "Или напишите @theother_archeee для получения продвинутого доступа.")
         return
 
+    # Создаем директорию для файлов, если её нет
+    os.makedirs("application_files", exist_ok=True)
+    
+    # Формируем уникальное имя файла из ID пользователя и текущей даты/времени
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"id{user_id}_pdf_{current_time}.pdf"
+    file_path = os.path.join("application_files", file_name)
+    
     # 1) скачиваем
     file = await message.bot.get_file(message.document.file_id)
     pdf_bytes = await message.bot.download_file(file.file_path)
-    with open("temp.pdf", "wb") as f:
+    with open(file_path, "wb") as f:
         f.write(pdf_bytes.getvalue())
 
     # 2) конвертируем в текст
-    raw_text = extract_text_from_pdf("temp.pdf")
+    raw_text = extract_text_from_pdf(file_path)
     clean_text = clean_pdf_text(raw_text)
 
     # 3) спрашиваем Deepseek
