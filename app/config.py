@@ -7,6 +7,7 @@ class Config(BaseSettings):
     openai_key: str
     deepseek_key: str
     assistant_id: str
+    proxy_url: str = None  # Added proxy_url field
 
     # Модели для разных задач
     openai_model: str = "gpt-4o-mini"  # Модель для ChatGPT

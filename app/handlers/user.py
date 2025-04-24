@@ -32,7 +32,7 @@ async def process_pdf(message: Message, state: FSMContext):
     if pdf_used:
         await message.answer("Вы уже использовали проверку PDF. "
                              "Вы получите новую через 72 часа. "
-                             "Или напишите @ilyasGaliev для получения продвинутого доступа.")
+                             "Или напишите @theother_archeee для получения продвинутого доступа.")
         return
 
     # 1) скачиваем
@@ -173,7 +173,7 @@ async def process_question(message: Message, state: FSMContext):
     if ask_count >= 5:
         await message.answer("Вы уже использовали все 5 вопросов. "
                              "Ваш лимит обновится через 72 часа. "
-                             "Или напишите @ilyasGaliev для получения продвинутого доступа.")
+                             "Или напишите @theother_archeee для получения продвинутого доступа.")
         return
 
     await message.answer("Думаю…")

@@ -202,3 +202,27 @@ def get_user_by_username(username: str) -> Optional[dict]:
             (username.lstrip("@"),)  # убираем @ на случай если передали с ним
         ).fetchone()
         return dict(row) if row else None
+
+def delete_user(user_id: int) -> bool:
+    """Удаляет пользователя и все связанные с ним данные."""
+    with get_db() as conn:
+        try:
+            # Проверяем, существует ли пользователь
+            user_exists = conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user_exists:
+                return False
+                
+            # Удаляем связанные сообщения
+            conn.execute("DELETE FROM messages WHERE user_id = ?", (user_id,))
+            
+            # Удаляем связанный thread
+            conn.execute("DELETE FROM threads WHERE user_id = ?", (user_id,))
+            
+            # Удаляем пользователя
+            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            
+            conn.commit()
+            return True
+        except Exception:
+            conn.rollback()
+            return False
