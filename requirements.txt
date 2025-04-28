@@ -6,3 +6,4 @@ aiohttp>=3.9.3
 python-dotenv>=1.0.1
 httpx[socks]
 mistralai>=0.0.12
+psycopg2-binary

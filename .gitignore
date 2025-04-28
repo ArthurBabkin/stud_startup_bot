@@ -50,4 +50,16 @@ temp.pdf
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# Docker
+.dockerignore
+
+# Static files (если они генерируются, а не хранятся в репозитории)
+# static/ 

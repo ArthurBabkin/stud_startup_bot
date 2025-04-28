@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: stud_startup_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stud_startup
+      POSTGRES_USER: studuser
+      POSTGRES_PASSWORD: studpass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  bot:
+    build: .
+    container_name: stud_startup_bot
+    env_file:
+      - .env
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: stud_startup
+      DB_USER: studuser
+      DB_PASSWORD: studpass
+    volumes:
+      - ./application_files:/app/application_files
+      - ./static:/app/static
+    restart: unless-stopped
+
+volumes:
+  pgdata:

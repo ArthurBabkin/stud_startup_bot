@@ -10,15 +10,25 @@ class Config(BaseSettings):
     assistant_id: str
     mistral_key: str = ""  # API ключ для Mistral AI
     mistral_key_backup: str = ""  # Резервный API ключ для Mistral AI
-    proxy_url: str = None  # Added proxy_url field
+    
+    # Настройки прокси
+    proxy_url: str = None 
+    
     admin_ids_str: str = "1110163898"  # Строка с ID администраторов через запятую в .env
     
     # Модели для разных задач
     openai_model: str = "gpt-4o-mini"  # Модель для ChatGPT
-    deepseek_model: str = "deepseek-v3"  # Модель для Deepseek
+    deepseek_model: str = "deepseek-chat"  # Модель для Deepseek - обновлено с "deepseek-chat" на "deepseek-reasoner"
     
     # Настройки OCR
     use_mistral_ocr: bool = False  # Флаг для переключения между OCR методами
+    
+    # Настройки базы данных
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "stud_startup"
+    db_user: str = "studuser"
+    db_password: str = "studpass"
 
     class Config:
         env_file = ".env"

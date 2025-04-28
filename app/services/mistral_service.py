@@ -1,10 +1,11 @@
-from mistralai import Mistral
+from mistralai.client import MistralClient
 import os
 from app.config import config
 import logging
 from pdfplumber import open as pdf_open
 
 # Настройка логирования
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def extract_text_with_mistral_ocr(file_path: str) -> str:
@@ -30,18 +31,19 @@ async def extract_text_with_mistral_ocr(file_path: str) -> str:
     for api_key in api_keys:
         try:
             # Инициализируем клиент с текущим ключом
-            client = Mistral(api_key=api_key)
+            client = MistralClient(api_key=api_key)
             
             logger.info(f"Trying to process PDF with Mistral OCR using key: {api_key[:5]}...")
             
             # Upload the PDF file
-            uploaded_pdf = client.files.upload(
-                file={
-                    "file_name": os.path.basename(file_path),
-                    "content": open(file_path, "rb"),
-                },
-                purpose="ocr"
-            )
+            with open(file_path, "rb") as f:
+                uploaded_pdf = client.files.upload(
+                    file={
+                        "file_name": os.path.basename(file_path),
+                        "content": f,
+                    },
+                    purpose="ocr"
+                )
             
             # Get the signed URL
             signed_url = client.files.get_signed_url(file_id=uploaded_pdf.id)
@@ -94,4 +96,4 @@ def extract_text_with_pdfplumber(file_path: str) -> str:
         return text
     except Exception as e:
         logger.error(f"Error with pdfplumber: {str(e)}")
-        return "" 
+        return ""
