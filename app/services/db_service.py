@@ -9,7 +9,7 @@ import os
 # Константы для лимитов
 LIMIT_RESET_DAYS = 2  # Количество дней до сброса лимита
 ASK_LIMIT = 5  # Лимит использования /ask команды
-PDF_LIMIT = 2  # Лимит проверки PDF (1 = один раз разрешено)
+PDF_LIMIT = 100  # Лимит проверки PDF (1 = один раз разрешено)
 
 # -------------------------------------------------
 #  Базовый helper
@@ -44,7 +44,7 @@ def init_db() -> None:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                id                INTEGER PRIMARY KEY,
+                id                BIGINT PRIMARY KEY,
                 username          TEXT,
                 first_name        TEXT,
                 last_name         TEXT,
@@ -60,7 +60,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS messages (
                 message_id     SERIAL PRIMARY KEY,
-                user_id        INTEGER,
+                user_id        BIGINT,
                 timestamp      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 message_input  TEXT,
                 message_answer TEXT,
@@ -76,7 +76,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS pdfs (
                 pdf_id         SERIAL PRIMARY KEY,
-                user_id        INTEGER,
+                user_id        BIGINT,
                 timestamp      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 pdf_input      BYTEA,
                 message_answer TEXT,
@@ -91,7 +91,7 @@ def init_db() -> None:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS threads (
-                user_id   INTEGER PRIMARY KEY,
+                user_id   BIGINT PRIMARY KEY,
                 thread_id TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
