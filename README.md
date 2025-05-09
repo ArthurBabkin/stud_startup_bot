@@ -1,6 +1,6 @@
 # StudStartupBot
 
-**Startup Bot** is a Telegram bot built to support student startup projects by helping users navigate grant applications to "Студенческий Стартап" by "Фонд Содействия Инновациям" and improve their chances of success. It leverages advanced AI services (OpenAI, Deepseek, Mistral) and OCR capabilities to analyze and provide feedback on grant applications.A Telegram bot for startup-related tasks, leveraging AI services (OpenAI, Deepseek, Mistral) and OCR capabilities. The bot uses PostgreSQL for data storage and is designed for easy deployment with Docker Compose.
+**Startup Bot** is a Telegram bot built to support student startup projects by helping users navigate grant applications and improve their chances of success. It leverages advanced AI services (OpenAI, Deepseek, Mistral) and OCR capabilities to analyze and provide feedback on grant applications.A Telegram bot for startup-related tasks, leveraging AI services (OpenAI, Deepseek, Mistral) and OCR capabilities. The bot uses PostgreSQL for data storage and is designed for easy deployment with Docker Compose.
 
 The bot is backed by a PostgreSQL database and is easily deployable using Docker Compose.
 
@@ -20,11 +20,11 @@ The bot is backed by a PostgreSQL database and is easily deployable using Docker
 - PostgreSQL database backend.
 - Telegram bot with AI-generated responses.
 - Supports multiple AI providers:
+
   - OpenAI
   - Deepseek
-  - Mistral (including SOTA OCR for document processing)
+  - Mistral (including OCR for document processing)
 - PostgreSQL database backend.
-- Proxy configuration to access OpenAI LLM models from Russia.
 - Easy deployment with Docker Compose.
 
 ## Prerequisites
@@ -32,12 +32,41 @@ The bot is backed by a PostgreSQL database and is easily deployable using Docker
 - [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) (recommended)
 - Alternatively: Python 3.11+ and PostgreSQL if running locally without Docker
 
+## Project Structure
+
+├── app/                       # Main application code
+│   ├── main.py                # Entry point for the bot
+│   ├── router.py              # Telegram bot routing and command registration
+│   ├── config.py              # Configuration and environment variable management
+│   ├── handlers/              # Telegram bot handlers
+│   │   ├── user.py            # User interaction handlers
+│   │   ├── admin.py           # Admin command handlers
+│   │   ├── startup.py         # Startup-specific logic and handlers
+│   │   └── states.py          # State management for conversations
+│   └── services/              # Service modules
+│       ├── db_service.py      # Database access and queries
+│       ├── openai_service.py  # Integration with OpenAI API (ChatGPT and DeepSeek models)
+│       ├── ocr.py             # Mistral OCR logic
+│       └── constants.py       # Constants
+├── application_files/         # Uploaded and processed application documents (PDFs, etc.)
+├── static/                    # Static files
+│   ├── privacy/               # Privacy policy and user agreement PDFs
+│   └── photos/                # Images and screenshots for the bot instructions
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Docker build instructions
+├── docker-compose.yml         # Docker Compose configuration
+├── .env                       # Environment variables (not committed)
+├── .gitignore                 # Git ignore rules
+├── .dockerignore              # Docker ignore rules
+└── README.md                  # Project documentation (this file)
+
 ## Setup & Deployment
 
 ### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/ArthurBabkin/stud_startup_bot.git
+cd <your-project-directory>
 ```
 
 ### 2. Configure Environment Variables
@@ -51,7 +80,7 @@ deepseek_key=YOUR_DEEPSEEK_API_KEY
 assistant_id=YOUR_ASSISTANT_ID
 mistral_key=YOUR_MISTRAL_API_KEY
 mistral_key_backup=YOUR_MISTRAL_API_KEY_BACKUP
-proxy_url=YOUR_PROXY_URL  # optional, to access OpenAI LLM models from Russia
+proxy_url=YOUR_PROXY_URL  # optional
 admin_ids_str=1110163898  # comma-separated admin Telegram IDs
 openai_model=gpt-4o-mini
 deepseek_model=deepseek-chat
