@@ -6,11 +6,11 @@ from app.config import config
 
 router = Router()
 
-# Команда для получения статистики
+# Command for getting statistics
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
     if message.from_user.id not in config.admin_ids:
         return await message.answer("У вас нет прав для использования этой команды.")
 
-    total_messages, unique_users = get_message_stats()  # Получаем статистику
+    total_messages, unique_users = get_message_stats()  # Get statistics
     await message.answer(f"Статистика:\nВсего сообщений: {total_messages}\nУникальных пользователей: {unique_users}")

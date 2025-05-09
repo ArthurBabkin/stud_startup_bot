@@ -4,7 +4,7 @@ from aiogram.types import Message, FSInputFile, ReplyKeyboardMarkup, KeyboardBut
 from aiogram.filters import Command
 from pdfplumber import open as pdf_open
 from aiogram.fsm.context import FSMContext
-from .states import AskStates, CheckStates, FeedbackStates    # 👈 добавили FeedbackStates
+from .states import AskStates, CheckStates, FeedbackStates
 from app.services import db_service
 from app.services.db_service import ASK_LIMIT, PDF_LIMIT, LIMIT_RESET_DAYS, update_message_feedback
 from aiogram.filters import StateFilter
@@ -21,10 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ───── /check ─────────────────────────────────────────────
+# ----- /check command handler -----
 @router.message(Command("check"))
 async def start_check(message: Message, state: FSMContext):
-    # Текст-инструкция
+    # Instruction text
     check_text = (
         "<b>Как скачать PDF заявку?</b>\n"
         "1. Заходишь на сайт https://online.fasie.ru/m\n"
@@ -57,7 +57,7 @@ async def start_check(message: Message, state: FSMContext):
     )
     await state.set_state(CheckStates.waiting_for_pdf)
 
-# ───── получаем PDF, если ждём его ───────────────────────
+# ----- receive PDF if waiting for it -----
 @router.message(CheckStates.waiting_for_pdf,
                 lambda m: m.document and m.document.mime_type == "application/pdf")
 async def process_pdf(message: Message, state: FSMContext):
@@ -139,22 +139,22 @@ async def process_pdf(message: Message, state: FSMContext):
         await send_error_and_commands(message, user_id, context='check')
         await state.clear()
 
-# -------- вспомогательные функции --------
+# -------- helper functions --------
 ALLOWED_TAGS = {"b", "i", "blockquote"}
 
 def sanitize_html(text: str) -> str:
     """
-    Оставляем только <b>, <i>, <blockquote>.
-    Переносы строки — обычный \\n.
+    Only keep <b>, <i>, <blockquote>.
+    Line breaks are regular \\n.
     """
-    # <ul><li> => • пункт \\n
+    # <ul><li> => • item \\n
     text = text.replace("<ul>", "").replace("</ul>", "") \
                .replace("</li>", "\n").replace("<li>", "• ")
 
-    # <p> → двойной перевод строки
+    # <p> → double line break
     text = text.replace("</p>", "\n\n").replace("<p>", "")
 
-    # <br> → перевод строки
+    # <br> → line break
     text = text.replace("<br>", "\n").replace("<br/>", "\n")
 
     import re
@@ -163,22 +163,22 @@ def sanitize_html(text: str) -> str:
         return m.group(0) if tag in ALLOWED_TAGS else ""
     cleaned = re.sub(r"</?([a-zA-Z0-9]+)[^>]*>", _keep, text)
 
-    # телеграм игнорирует множественные подряд \n — можно сжать
+    # Telegram ignores multiple consecutive \n — can compress
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """Функция для извлечения текста из PDF"""
+    """Function to extract text from PDF"""
     with pdf_open(file_path) as pdf:
         text = ''
         for page in pdf.pages:
-            text += page.extract_text()  # Извлекаем текст с каждой страницы
+            text += page.extract_text()  # Extract text from each page
     return text
 
 def clean_pdf_text(text: str) -> str:
-    """Функция для очистки текста от ненужных разделов"""
+    """Function to clean text from unnecessary sections"""
     sections_to_remove = ["ДАННЫЕ ОБ УЧАСТНИКЕ", "ОПЫТ ВЗАИМОДЕЙСТВИЯ ЗАЯВИТЕЛЯ С ДРУГИМИ ИНСТИТУТАМИ РАЗВИТИЯ"]
     for section in sections_to_remove:
-        text = text.replace(section, "")  # Удаляем указанные разделы
+        text = text.replace(section, "")  # Remove specified sections
     return text
 
 def split_long_message(text, max_length=4000):
@@ -235,19 +235,19 @@ def split_long_message(text, max_length=4000):
     
     return chunks
 
-# Обработчик для команды /help
+# Handler for /help command
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     user_id = message.from_user.id
     
-    # Получаем текущие лимиты пользователя
+    # Get current user limits
     ask_count, pdf_used = db_service.get_user_limits(user_id)
     
-    # Рассчитываем оставшиеся использования
+    # Calculate remaining uses
     ask_remaining = max(0, ASK_LIMIT - ask_count)
     pdf_remaining = max(0, PDF_LIMIT - pdf_used)
     
-    # Получаем время до сброса
+    # Get time until reset
     hours_until_reset = db_service.get_time_until_reset(user_id)
     
     reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
@@ -269,14 +269,14 @@ async def cmd_help(message: Message):
     await message.answer(help_text)
 
 
-# ───── /ask ────────────────────────────────────────────────
+# ----- /ask command handler -----
 @router.message(Command("ask"))
 async def start_ask(message: Message, state: FSMContext):
     await message.answer("Введите свой вопрос одним сообщением. "
                          "Для отмены отправьте /cancel")
     await state.set_state(AskStates.waiting_for_question)
 
-# ───── отмена ─────────────────────────────────────────────
+# ----- cancel handler -----
 @router.message(Command("cancel"))
 async def cancel_anytime(message: Message, state: FSMContext):
     if await state.get_state():
@@ -284,14 +284,14 @@ async def cancel_anytime(message: Message, state: FSMContext):
         
         user_id = message.from_user.id
         
-        # Получаем текущие лимиты пользователя
+        # Get current user limits
         ask_count, pdf_used = db_service.get_user_limits(user_id)
         
-        # Рассчитываем оставшиеся использования
+        # Calculate remaining uses
         ask_remaining = max(0, ASK_LIMIT - ask_count)
         pdf_remaining = max(0, PDF_LIMIT - pdf_used)
         
-        # Получаем время до сброса
+        # Get time until reset
         hours_until_reset = db_service.get_time_until_reset(user_id)
         
         reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
@@ -314,7 +314,7 @@ async def cancel_anytime(message: Message, state: FSMContext):
     else:
         await message.answer("Нечего отменять.")
 
-# ───── получаем вопрос пользователя ───────────────────────
+# ----- receive user question -----
 @router.message(AskStates.waiting_for_question, F.text)
 async def process_question(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -377,7 +377,7 @@ async def process_question(message: Message, state: FSMContext):
         await send_error_and_commands(message, user_id, context='ask')
         await state.clear()
 
-# --- обработка фидбека после /ask ---
+# --- feedback processing after /ask ---
 @router.message(FeedbackStates.waiting_for_feedback_decision, F.text)
 async def feedback_decision(message: Message, state: FSMContext):
     text = message.text.strip().lower()
@@ -393,7 +393,7 @@ async def feedback_decision(message: Message, state: FSMContext):
     else:
         await message.answer("Пожалуйста, выберите 'Да' или 'Нет' на клавиатуре.")
 
-# --- обработка текстового отзыва ---
+# --- text feedback processing ---
 @router.message(FeedbackStates.waiting_for_feedback_text, F.text)
 async def feedback_text(message: Message, state: FSMContext):
     feedback = message.text.strip()
@@ -410,20 +410,20 @@ async def feedback_text(message: Message, state: FSMContext):
     await state.clear()
 
 
-# Хендлер на любые другие текстовые сообщения
+# Handler for any other text messages
 @router.message(StateFilter(default_state), F.text)
 async def fallback_help(message: Message):
     user_id = message.from_user.id
     logger.info(f"[FALLBACK] User {user_id} sent unknown text in default state.")
     
-    # Получаем текущие лимиты пользователя
+    # Get current user limits
     ask_count, pdf_used = db_service.get_user_limits(user_id)
     
-    # Рассчитываем оставшиеся использования
+    # Calculate remaining uses
     ask_remaining = max(0, ASK_LIMIT - ask_count)
     pdf_remaining = max(0, PDF_LIMIT - pdf_used)
     
-    # Получаем время до сброса
+    # Get time until reset
     hours_until_reset = db_service.get_time_until_reset(user_id)
     
     reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
@@ -479,7 +479,7 @@ async def privacy_policy(message: Message):
     )
     await message.answer(response_text, parse_mode="HTML")
 
-# --- вспомогательная функция для показа "что дальше" ---
+# --- helper function to show "what's next" ---
 def send_what_next(message, ask_count, pdf_used, state_type):
     ask_remaining = max(0, ASK_LIMIT - ask_count)
     pdf_remaining = max(0, PDF_LIMIT - pdf_used)
@@ -526,7 +526,7 @@ async def useful(message: Message):
     user_id = message.from_user.id
     logger.info(f"[USEFUL_DATA] User {user_id} requested useful materials.")
     
-    # Добавляем отладочное сообщение
+    # Add debug message
     print(f"DEBUG: /useful command received from user {user_id}")
     logger.info(f"[USEFUL_DATA] Starting useful handler processing for user {user_id}")
     
@@ -537,14 +537,14 @@ async def useful(message: Message):
         "📑 Презентация с выступления — <a href='https://t.me/theother_channel/63'>ссылка</a>\n\n"
     )
     
-    # Получаем текущие лимиты пользователя для показа в списке команд
+    # Get current user limits to show in the command list
     ask_count, pdf_used = db_service.get_user_limits(user_id)
     ask_remaining = max(0, ASK_LIMIT - ask_count)
     pdf_remaining = max(0, PDF_LIMIT - pdf_used)
     hours_until_reset = db_service.get_time_until_reset(user_id)
     reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
     
-    # Список команд с обновленной информацией о лимитах
+    # Command list with updated limit information
     commands = (
         "<b>📋 Список доступных команд:</b>\n"
         "/start — Запуск бота\n"
@@ -560,7 +560,7 @@ async def useful(message: Message):
         f"{reset_text}"
     )
     
-    # Отправляем сообщение с полезными материалами и командами
+    # Send message with useful materials and commands
     await message.answer(text, parse_mode="HTML")
     await message.answer(commands, parse_mode="HTML")
     logger.info(f"[USEFUL_DATA] Sent useful materials to user {user_id}")

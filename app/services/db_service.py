@@ -6,18 +6,18 @@ from datetime import datetime, timedelta
 import math
 import os
 
-# Константы для лимитов
-LIMIT_RESET_DAYS = 2  # Количество дней до сброса лимита
-ASK_LIMIT = 5  # Лимит использования /ask команды
-PDF_LIMIT = 100  # Лимит проверки PDF (1 = один раз разрешено)
+# Constants for limits
+LIMIT_RESET_DAYS = 2  # Number of days before limit reset
+ASK_LIMIT = 5         # Limit for /ask command usage
+PDF_LIMIT = 100       # Limit for PDF checks (1 = allowed once)
 
 # -------------------------------------------------
-#  Базовый helper
+#  Basic helper
 # -------------------------------------------------
 
 @contextmanager
 def get_db():
-    """Context manager для безопасной работы с соединением PostgreSQL."""
+    """Context manager for safe PostgreSQL connection handling."""
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME", "stud_startup"),
         user=os.getenv("DB_USER", "studuser"),
@@ -32,15 +32,15 @@ def get_db():
         conn.close()
 
 # -------------------------------------------------
-#  Инициализация (создание таблиц)
+#  Initialization (table creation)
 # -------------------------------------------------
 
 def init_db() -> None:
-    """Создаёт все необходимые таблицы, если их ещё нет."""
+    """Creates all required tables if they do not exist yet."""
     with get_db() as conn:
         cur = conn.cursor()
 
-        # Пользователи Telegram
+        # Telegram users
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -55,7 +55,7 @@ def init_db() -> None:
             """
         )
 
-        # Сообщения между ботом и пользователем
+        # Messages between bot and user
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS messages (
@@ -71,7 +71,7 @@ def init_db() -> None:
             """
         )
 
-        # Проверенные PDF заявки пользователя
+        # Checked PDF applications of the user
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS pdfs (
@@ -87,7 +87,7 @@ def init_db() -> None:
             """
         )
 
-        # Mapping Telegram‑user → OpenAI‑thread
+        # Mapping Telegram user → OpenAI thread
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS threads (
@@ -101,7 +101,7 @@ def init_db() -> None:
         conn.commit()
 
 # -------------------------------------------------
-#  CRUD‑функции для users / messages / threads
+#  CRUD functions for users / messages / threads
 # -------------------------------------------------
 
 def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None) -> None:
@@ -111,7 +111,7 @@ def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[
         exists = cur.fetchone()
 
         if exists:
-            # обновим имя и username, но НЕ трогаем лимиты
+            # Update name and username, but DO NOT touch limits
             cur.execute(
                 """
                 UPDATE users SET username = %s, first_name = %s, last_name = %s
@@ -120,7 +120,7 @@ def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[
                 (username, first_name, last_name, user_id)
             )
         else:
-            # создаём с лимитами по умолчанию
+            # Create with default limits
             cur.execute(
                 """
                 INSERT INTO users (id, username, first_name, last_name, ask_count, pdf_check_done, limits_reset_at)
@@ -132,7 +132,7 @@ def add_user(user_id: int, username: Optional[str] = None, first_name: Optional[
         conn.commit()
 
 def save_message(user_id: int, message_input: str, message_answer: str = None) -> int:
-    """Сохраняет сообщение пользователя и ответ бота (если есть)."""
+    """Saves the user's message and the bot's reply (if any)."""
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -165,7 +165,7 @@ def get_thread(user_id: int) -> Optional[str]:
 def save_thread(user_id: int, thread_id: str) -> None:
     with get_db() as conn:
         cur = conn.cursor()
-        # ON CONFLICT DO UPDATE эквивалент INSERT OR REPLACE в SQLite
+        # ON CONFLICT DO UPDATE is equivalent to INSERT OR REPLACE in SQLite
         cur.execute(
             """
             INSERT INTO threads (user_id, thread_id) 
@@ -177,7 +177,7 @@ def save_thread(user_id: int, thread_id: str) -> None:
         conn.commit()
 
 def save_pdf(user_id: int, pdf_input: bytes, message_answer: str = None) -> int:
-    """Сохраняет PDF пользователя и ответ бота (если есть)."""
+    """Saves the user's PDF and the bot's reply (if any)."""
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -192,7 +192,7 @@ def save_pdf(user_id: int, pdf_input: bytes, message_answer: str = None) -> int:
         return pdf_id
 
 def update_message_feedback(message_id: int, is_feedback: bool, feedback_text: str) -> None:
-    """Обновляет фидбек для сообщения."""
+    """Updates feedback for a message."""
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -204,7 +204,7 @@ def update_message_feedback(message_id: int, is_feedback: bool, feedback_text: s
         conn.commit()
 
 def update_pdf_feedback(pdf_id: int, is_feedback: bool, feedback_text: str) -> None:
-    """Обновляет фидбек для PDF-записи."""
+    """Updates feedback for a PDF record."""
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -216,7 +216,7 @@ def update_pdf_feedback(pdf_id: int, is_feedback: bool, feedback_text: str) -> N
         conn.commit()
 
 # -------------------------------------------------
-#  Ограничения по использованию
+#  Usage limits
 # -------------------------------------------------
 
 def get_user_limits(user_id: int) -> Tuple[int, int]:
@@ -233,7 +233,7 @@ def get_user_limits(user_id: int) -> Tuple[int, int]:
         if not row:
             return (0, 0)
 
-        # если поле пустое — сбрасываем лимиты
+        # If the field is empty — reset limits
         last_reset_str = row["limits_reset_at"]
         if not last_reset_str:
             cur = conn.cursor()
@@ -247,7 +247,7 @@ def get_user_limits(user_id: int) -> Tuple[int, int]:
             conn.commit()
             return (0, 0)
 
-        # сравниваем дату последнего сброса с текущей
+        # Compare last reset date with current date
         last_reset = last_reset_str
         if now - last_reset > timedelta(days=LIMIT_RESET_DAYS):
             cur = conn.cursor()
@@ -282,7 +282,7 @@ def mark_pdf_used(user_id: int):
         conn.commit()
 
 # -------------------------------------------------
-#  Поиск по username
+#  Search by username
 # -------------------------------------------------
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
@@ -290,32 +290,32 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(
             "SELECT * FROM users WHERE username = %s",
-            (username.lstrip("@"),)  # убираем @ на случай если передали с ним
+            (username.lstrip("@"),)  # remove @ in case it was provided
         )
         row = cur.fetchone()
         return dict(row) if row else None
 
 def delete_user(user_id: int) -> bool:
-    """Удаляет пользователя и все связанные с ним данные."""
+    """Deletes a user and all related data."""
     with get_db() as conn:
         try:
             cur = conn.cursor()
-            # Проверяем, существует ли пользователь
+            # Check if user exists
             cur.execute("SELECT 1 FROM users WHERE id = %s", (user_id,))
             user_exists = cur.fetchone()
             if not user_exists:
                 return False
                 
-            # Удаляем связанные сообщения
+            # Delete related messages
             cur.execute("DELETE FROM messages WHERE user_id = %s", (user_id,))
             
-            # Удаляем связанный thread
+            # Delete related thread
             cur.execute("DELETE FROM threads WHERE user_id = %s", (user_id,))
             
-            # Удаляем PDF записи
+            # Delete PDF records
             cur.execute("DELETE FROM pdfs WHERE user_id = %s", (user_id,))
             
-            # Удаляем пользователя
+            # Delete user
             cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
             
             conn.commit()
@@ -325,7 +325,7 @@ def delete_user(user_id: int) -> bool:
             return False
 
 def get_time_until_reset(user_id: int) -> Optional[int]:
-    """Возвращает количество часов до сброса лимитов или None если лимиты уже сброшены."""
+    """Returns the number of hours until limits reset, or None if limits are already reset."""
     now = datetime.now()
     
     with get_db() as conn:
@@ -343,7 +343,7 @@ def get_time_until_reset(user_id: int) -> Optional[int]:
         next_reset = last_reset + timedelta(days=LIMIT_RESET_DAYS)
         
         if now >= next_reset:
-            return None  # Лимиты уже должны быть сброшены
+            return None  # Limits should already be reset
         
         hours_remaining = (next_reset - now).total_seconds() / 3600
-        return math.ceil(hours_remaining)  # Округляем вверх до ближайшего часа
+        return math.ceil(hours_remaining)  # Round up to the nearest hour

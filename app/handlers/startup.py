@@ -14,7 +14,7 @@ router = Router()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@router.message(CommandStart())  # Обработчик для команды /start
+@router.message(CommandStart())  # Handler for /start command
 async def cmd_start(message: Message):
     user = message.from_user
     logger.info(f"[START] User {user.id} started bot. Username: {user.username}")
@@ -25,7 +25,7 @@ async def cmd_start(message: Message):
         last_name=user.last_name,
     )
     
-    # Формируем текст приветственного сообщения
+    # Compose welcome message text
     welcome_text = (
         "<b>Привет! 👋</b>\n"
         "Я — твой ИИ-помощник. Помогу тебе подготовить и улучшить заявку на грант "
@@ -54,7 +54,7 @@ async def cmd_start(message: Message):
     
     logger.debug(f"[START] Welcome text: {welcome_text}")
     try:
-        # Список фотографий для отправки в одном сообщении
+        # List of photos to send in one message
         photo_paths = [
             "static/photos/Stud-startup-bot-1.jpg",
             "static/photos/Stud-startup-bot-2.jpg",
@@ -69,13 +69,13 @@ async def cmd_start(message: Message):
         ]
         logger.debug(f"[START] Photo paths: {photo_paths}")
         
-        # Создаем список медиа-объектов для групповой отправки
+        # Create a list of media objects for group sending
         media_group = []
         
-        # Проверяем существование файлов
+        # Check if files exist
         for i, photo_path in enumerate(photo_paths):
             if os.path.exists(photo_path):
-                # Первое фото с подписью, остальные без
+                # First photo with caption, others without
                 caption = welcome_text if i == 0 else None
                 media_group.append({
                     "type": "photo",
@@ -87,16 +87,16 @@ async def cmd_start(message: Message):
                 logger.info(f"[START] File not found: {photo_path}")
         
         logger.debug(f"[START] Media group length: {len(media_group)}")
-        # Отправляем группу фото одним сообщением
+        # Send group of photos in one message
         if media_group:
             await message.answer_media_group(media=media_group)
         else:
-            # Если нет фото, отправляем только текст
+            # If no photos, send only text
             await message.answer(welcome_text, parse_mode="HTML")
     
     except Exception as e:
         logger.error(f"[START] Error sending photos: {e}")
-        # В случае ошибки отправляем только текст
+        # In case of error, send only text
         await message.answer(welcome_text, parse_mode="HTML")
 
 @router.message(Command("privacy"))
@@ -142,14 +142,14 @@ async def useful_startup(message: Message, state: FSMContext):
         "📑 Презентация с выступления — <a href='https://t.me/theother_channel/63'>ссылка</a>\n\n"
     )
     
-    # Получаем текущие лимиты пользователя для показа в списке команд
+    # Get current user limits to show in the command list
     ask_count, pdf_used = db_service.get_user_limits(user_id)
     ask_remaining = max(0, ASK_LIMIT - ask_count)
     pdf_remaining = max(0, PDF_LIMIT - pdf_used)
     hours_until_reset = db_service.get_time_until_reset(user_id)
     reset_text = f"⏰ Лимиты сбросятся через {hours_until_reset} ч." if hours_until_reset else f"⏰ Лимиты сбрасываются каждые {LIMIT_RESET_DAYS} дня."
     
-    # Список команд с обновленной информацией о лимитах
+    # Command list with updated limit information
     commands = (
         "<b>📋 Список доступных команд:</b>\n"
         "/start — Запуск бота\n"
@@ -165,7 +165,7 @@ async def useful_startup(message: Message, state: FSMContext):
         f"{reset_text}"
     )
     
-    # Отправляем сообщение с полезными материалами и командами
+    # Send message with useful materials and commands
     await message.answer(text, parse_mode="HTML")
     await message.answer(commands, parse_mode="HTML")
 
