@@ -20,11 +20,11 @@ The bot is backed by a PostgreSQL database and is easily deployable using Docker
 - PostgreSQL database backend.
 - Telegram bot with AI-generated responses.
 - Supports multiple AI providers:
-
   - OpenAI
   - Deepseek
   - Mistral (including OCR for document processing)
 - PostgreSQL database backend.
+- Proxy configuration to access OpenAI LLM models from Russia.
 - Easy deployment with Docker Compose.
 
 ## Prerequisites
@@ -52,7 +52,7 @@ deepseek_key=YOUR_DEEPSEEK_API_KEY
 assistant_id=YOUR_ASSISTANT_ID
 mistral_key=YOUR_MISTRAL_API_KEY
 mistral_key_backup=YOUR_MISTRAL_API_KEY_BACKUP
-proxy_url=YOUR_PROXY_URL  # optional
+proxy_url=YOUR_PROXY_URL  # optional, to access OpenAI LLM models from Russia
 admin_ids_str=1110163898  # comma-separated admin Telegram IDs
 openai_model=gpt-4o-mini
 deepseek_model=deepseek-chat
