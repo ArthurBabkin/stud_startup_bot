@@ -1,4 +1,4 @@
-# StudStartupBot
+# StudStartupBot (https://t.me/StudStartupBot)
 
 **Startup Bot** is a Telegram bot built to support student startup projects by helping users navigate grant applications and improve their chances of success. It leverages advanced AI services (OpenAI, Deepseek, Mistral) and OCR capabilities to analyze and provide feedback on grant applications.A Telegram bot for startup-related tasks, leveraging AI services (OpenAI, Deepseek, Mistral) and OCR capabilities. The bot uses PostgreSQL for data storage and is designed for easy deployment with Docker Compose.
 
