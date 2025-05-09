@@ -38,7 +38,6 @@ The bot is backed by a PostgreSQL database and is easily deployable using Docker
 
 ```bash
 git clone https://github.com/ArthurBabkin/stud_startup_bot.git
-cd <your-project-directory>
 ```
 
 ### 2. Configure Environment Variables
