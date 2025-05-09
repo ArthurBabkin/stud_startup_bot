@@ -12,7 +12,7 @@ from aiogram.fsm.state import default_state
 import os
 from datetime import datetime
 from app.config import config
-from app.services.mistral_service import extract_text_with_mistral_ocr
+from app.services.ocr import extract_text_with_mistral_ocr
 import logging
 
 router = Router()
