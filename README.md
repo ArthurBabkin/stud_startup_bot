@@ -22,7 +22,7 @@ The bot is backed by a PostgreSQL database and is easily deployable using Docker
 - Supports multiple AI providers:
   - OpenAI
   - Deepseek
-  - Mistral (including OCR for document processing)
+  - Mistral (including SOTA OCR for document processing)
 - PostgreSQL database backend.
 - Proxy configuration to access OpenAI LLM models from Russia.
 - Easy deployment with Docker Compose.
